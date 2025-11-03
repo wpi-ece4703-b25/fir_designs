@@ -12,6 +12,34 @@ jack_port_t *input_port_right;
 jack_port_t *output_port_right;
 jack_client_t *client;
 
+#include <termios.h>
+#include <fcntl.h>
+
+void init_keyboard() {
+    struct termios term;
+    tcgetattr(STDIN_FILENO, &term);
+    term.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &term);
+    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK); // Set non-blocking read
+}
+
+void reset_keyboard() {
+    struct termios term;
+    tcgetattr(STDIN_FILENO, &term);
+    term.c_lflag |= ICANON | ECHO;
+    tcsetattr(STDIN_FILENO, TCSANOW, &term);
+}
+
+int key_pressed() {
+    int ch = getchar();
+    if (ch != EOF) {
+      // ungetc(ch, stdin); // Put it back for later use
+        return ch;
+    }
+    return 0;
+}
+
+
 typedef struct cascadestate {
     float s[2];  // filter state
     float c[2];  // filter coefficients
@@ -93,26 +121,151 @@ void initcascader() {
     createcascade(-1.96157f,  1.0f, &stage3r);
 }
 
+void configa() {
+    createcascade(     1.0f,  0.0f, &stage16r);
+    createcascade( 1.96157f,  1.0f, &stage2r);   // near pi
+    createcascade( 1.84776f,  1.0f, &stage4r);
+    createcascade( 1.66294f,  1.0f, &stage6r);
+    createcascade( 1.41421f,  1.0f, &stage8r);
+    createcascade( 1.11114f,  1.0f, &stage10r);
+    createcascade( 0.76537f,  1.0f, &stage12r);
+    createcascade( 0.39018f,  1.0f, &stage14r);
+    createcascade( 0.00000f,  1.0f, &stage1r);
+    createcascade(-0.39018f,  1.0f, &stage15r);
+    createcascade(-0.76537f,  1.0f, &stage13r);
+    createcascade(-1.11114f,  1.0f, &stage11r);
+    createcascade(-1.41421f,  1.0f, &stage9r);
+    createcascade(-1.66294f,  1.0f, &stage7r);
+    createcascade(-1.84776f,  1.0f, &stage5r);
+    createcascade(-1.96157f,  1.0f, &stage3r);  // near dc
+}
+
+
+void configb() {
+    createcascade(     1.0f,  0.0f, &stage16r);
+    createcascade( 1.96157f,  1.0f, &stage15r); // near pi
+    createcascade( 1.84776f,  1.0f, &stage14r);
+    createcascade( 1.66294f,  1.0f, &stage13r);
+    createcascade( 1.41421f,  1.0f, &stage12r);
+    createcascade( 1.11114f,  1.0f, &stage11r);
+    createcascade( 0.76537f,  1.0f, &stage10r);
+    createcascade( 0.39018f,  1.0f, &stage9r);
+    createcascade( 0.00000f,  1.0f, &stage8r);
+    createcascade(-0.39018f,  1.0f, &stage7r);
+    createcascade(-0.76537f,  1.0f, &stage6r);
+    createcascade(-1.11114f,  1.0f, &stage5r);
+    createcascade(-1.41421f,  1.0f, &stage4r);
+    createcascade(-1.66294f,  1.0f, &stage3r);
+    createcascade(-1.84776f,  1.0f, &stage2r);
+    createcascade(-1.96157f,  1.0f, &stage1r); // near dc
+}
+
+void configc() {
+    createcascade(     1.0f,  0.0f, &stage1r);
+    createcascade( 1.96157f,  1.0f, &stage2r); // near pi
+    createcascade( 1.84776f,  1.0f, &stage3r);
+    createcascade( 1.66294f,  1.0f, &stage4r);
+    createcascade( 1.41421f,  1.0f, &stage5r);
+    createcascade( 1.11114f,  1.0f, &stage6r);
+    createcascade( 0.76537f,  1.0f, &stage7r);
+    createcascade( 0.39018f,  1.0f, &stage8r);
+    createcascade( 0.00000f,  1.0f, &stage9r);
+    createcascade(-0.39018f,  1.0f, &stage10r);
+    createcascade(-0.76537f,  1.0f, &stage11r);
+    createcascade(-1.11114f,  1.0f, &stage12r);
+    createcascade(-1.41421f,  1.0f, &stage13r);
+    createcascade(-1.66294f,  1.0f, &stage14r);
+    createcascade(-1.84776f,  1.0f, &stage15r);
+    createcascade(-1.96157f,  1.0f, &stage16r); // near dc
+}
+
 int stagemonitor = 16;
 
 float processCascader(float x) {
     float v;
 
+    int c = key_pressed();
+    if (c == 'u') {
+      stagemonitor = (stagemonitor < 16) ? stagemonitor+1 : stagemonitor;
+      printf("%d\n", stagemonitor);
+    } else if (c == 'd') {
+      stagemonitor = (stagemonitor > 0) ? stagemonitor-1 : stagemonitor;
+      printf("%d\n", stagemonitor);
+    } else if (c == 'a') {
+      printf("config a\n");
+      configa();
+    } else if (c == 'b') {
+      printf("config b\n");
+      configb();
+    } else if (c == 'c') {
+      printf("config c\n");
+      configc();
+    }
+
+    if (stagemonitor == 0)
+      return x;
+
     v = cascadefir(x, &stage1r);
+    if (stagemonitor == 1)
+      return v*0.5;
+
     v = cascadefir(v, &stage2r);
+    if (stagemonitor == 2)
+      return v*0.25;
+
     v = cascadefir(v, &stage3r);
+    if (stagemonitor == 3)
+      return v*0.1666;
+
     v = cascadefir(v, &stage4r);
+    if (stagemonitor == 4)
+      return v*0.125;
+
     v = cascadefir(v, &stage5r);
+    if (stagemonitor == 5)
+      return v*0.1;
+
     v = cascadefir(v, &stage6r);
+    if (stagemonitor == 6)
+      return v*0.08333;
+
     v = cascadefir(v, &stage7r);
+    if (stagemonitor == 7)
+      return v*0.07142;
+
     v = cascadefir(v, &stage8r);
+    if (stagemonitor == 8)
+      return v*0.0625;
+
     v = cascadefir(v, &stage9r);
+    if (stagemonitor == 9)
+
+      return v*0.05555;
+
     v = cascadefir(v, &stage10r);
+    if (stagemonitor == 10)
+      return v*0.05;
+
     v = cascadefir(v, &stage11r);
+    if (stagemonitor == 11)
+      return v*0.04545;
+
     v = cascadefir(v, &stage12r);
+    if (stagemonitor == 12)
+      return v*0.041666;
+
     v = cascadefir(v, &stage13r);
+    if (stagemonitor == 13)
+      return v*0.03846;
+
     v = cascadefir(v, &stage14r);
+    if (stagemonitor == 14)
+      return v*0.035714;
+
     v = cascadefir(v, &stage15r);
+    if (stagemonitor == 15)
+      return v*0.03333;
+
     v = cascadefir(v, &stage16r);
     return v*0.03125f;
 }
