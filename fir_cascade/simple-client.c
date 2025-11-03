@@ -163,7 +163,6 @@ int main (int argc, char *argv[]) {
   jack_set_process_callback (client, process, 0);
   jack_on_shutdown (client, jack_shutdown, 0);
 
-  init_keyboard();
   initcascadel();
   initcascader();
 
